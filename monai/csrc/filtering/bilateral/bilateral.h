@@ -16,38 +16,53 @@ limitations under the License.
 #include <torch/extension.h>
 #include "utils/common_utils.h"
 
-torch::Tensor BilateralFilterCpu(torch::Tensor input, float spatial_sigma, float color_sigma);
+torch::Tensor BilateralFilterCpu(torch::Tensor input,  torch::Tensor output, float spatial_sigma, float color_sigma);
 torch::Tensor BilateralFilterPHLCpu(torch::Tensor input, float spatial_sigma, float color_sigma);
 
 #ifdef WITH_CUDA
-torch::Tensor BilateralFilterCuda(torch::Tensor input, float spatial_sigma, float color_sigma);
+torch::Tensor BilateralFilterCuda(torch::Tensor input, torch::Tensor output, float spatial_sigma, float color_sigma);
 torch::Tensor BilateralFilterPHLCuda(torch::Tensor input, float spatial_sigma, float color_sigma);
 #endif
 
-torch::Tensor BilateralFilter(torch::Tensor input, float spatial_sigma, float color_sigma, bool usePHL) {
+torch::Tensor BilateralFilter(torch::Tensor input, torch::Tensor output, float spatial_sigma, float color_sigma, bool usePHL) {
+  torch::Tensor (*filterFunction)(torch::Tensor, torch::Tensor, float, float);
+
+#ifdef WITH_CUDA
+  if (torch::cuda::is_available() && input.is_cuda()) {
+    CHECK_CONTIGUOUS_CUDA(input);
+    filterFunction =  &BilateralFilterCuda;
+  } else {
+    filterFunction =  &BilateralFilterCpu;
+  }
+#else
+  filterFunction =  &BilateralFilterCpu;
+#endif
+
+  return filterFunction(input, output, spatial_sigma, color_sigma);
+}
+
+torch::Tensor BilateralFilterPHL(torch::Tensor input, float spatial_sigma, float color_sigma, bool usePHL) {
   torch::Tensor (*filterFunction)(torch::Tensor, float, float);
 
 #ifdef WITH_CUDA
   if (torch::cuda::is_available() && input.is_cuda()) {
     CHECK_CONTIGUOUS_CUDA(input);
-    filterFunction = usePHL ? &BilateralFilterPHLCuda : &BilateralFilterCuda;
+    filterFunction =  &BilateralFilterPHLCuda;
   } else {
-    filterFunction = usePHL ? &BilateralFilterPHLCpu : &BilateralFilterCpu;
+    filterFunction =  &BilateralFilterPHLCpu;
   }
 #else
-  filterFunction = usePHL ? &BilateralFilterPHLCpu : &BilateralFilterCpu;
+  filterFunction =  &BilateralFilterPHLCpu;
 #endif
 
   return filterFunction(input, spatial_sigma, color_sigma);
 }
 
-
-torch::Tensor JointBilateralFilterCuda(torch::Tensor input, torch::Tensor input2,float spatial_sigma, float color_sigma);
-
-torch::Tensor JointBilateralFilter(torch::Tensor input, torch::Tensor input2, float spatial_sigma, float color_sigma, bool usePHL) {
+torch::Tensor JointBilateralFilterCuda(torch::Tensor input, torch::Tensor input2, torch::Tensor output, float spatial_sigma, float color_sigma);
+torch::Tensor JointBilateralFilter(torch::Tensor input, torch::Tensor input2, torch::Tensor output, float spatial_sigma, float color_sigma, bool usePHL) {
   
   // torch::Tensor (*filterFunction)(torch::Tensor, float, float);
   // filterFunction = &JointBilateralFilterCuda;
 
-  return JointBilateralFilterCuda(input, input2, spatial_sigma, color_sigma);
+  return JointBilateralFilterCuda(input, input2, output, spatial_sigma, color_sigma);
 }

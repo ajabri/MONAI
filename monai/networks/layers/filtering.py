@@ -10,7 +10,8 @@
 # limitations under the License.
 
 import torch
-
+import math
+import numpy as np
 from monai.utils.module import optional_import
 
 _C, _ = optional_import("monai._C")
@@ -47,15 +48,19 @@ class BilateralFilter(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input, spatial_sigma=5, color_sigma=0.5, fast_approx=True):
+        # ctx.save_for_backward([spatial_sigma, color_sigma, fast_approx])
         ctx.params = (spatial_sigma, color_sigma, fast_approx)
-        output_data = _C.bilateral_filter(input, spatial_sigma, color_sigma, fast_approx)
+        _output = torch.empty_like(input)
+        output_data = _C.bilateral_filter(input, _output, spatial_sigma, color_sigma, fast_approx)
         return output_data
 
     @staticmethod
     def backward(ctx, grad_output):
+        # spatial_sigma, color_sigma, fast_approx = ctx.saved_variables
         spatial_sigma, color_sigma, fast_approx = ctx.params
-        grad_input = _C.bilateral_filter(grad_output, spatial_sigma, color_sigma, fast_approx)
-        return grad_input, None, None
+        _output = torch.empty_like(grad_output)
+        grad_input = _C.bilateral_filter(grad_output, _output, spatial_sigma, color_sigma, fast_approx)
+        return grad_input, None, None, None
 
 
 class JointBilateralFilter(torch.autograd.Function):
@@ -91,15 +96,19 @@ class JointBilateralFilter(torch.autograd.Function):
     def forward(ctx, input, input2, spatial_sigma=5, color_sigma=0.5, fast_approx=True):
         ctx.save_for_backward(input2) #, spatial_sigma, color_sigma, fast_approx,)
         ctx.params = (spatial_sigma, color_sigma, fast_approx)
-        output_data = _C.joint_bilateral_filter(input, input2, spatial_sigma, color_sigma, fast_approx)
+        _output = torch.empty_like(input)
+        output_data = _C.joint_bilateral_filter(input, input2, _output, spatial_sigma, color_sigma, fast_approx)
         return output_data
 
     @staticmethod
     def backward(ctx, grad_output):
-        input2 = ctx.saved_variables
+        input2, = ctx.saved_variables
         spatial_sigma, color_sigma, fast_approx = ctx.params
-        grad_input = _C.joint_bilateral_filter(grad_output, input2, spatial_sigma, color_sigma, fast_approx)
-        return grad_input
+        _output = torch.empty_like(grad_output)
+        grad_input = _C.joint_bilateral_filter(grad_output, input2, _output, spatial_sigma, color_sigma, fast_approx)
+        # grad_input = grad_output
+
+        return grad_input, None, None, None, None
 
 
 class PHLFilter(torch.autograd.Function):

@@ -249,8 +249,8 @@ void BilateralFilterCuda(torch::Tensor inputTensor, torch::Tensor outputTensor, 
 }
 
 // Function to choose template implementation based on dynamic, channels and dimensions
-torch::Tensor BilateralFilterCuda(torch::Tensor inputTensor, float spatialSigma, float colorSigma) {
-  torch::Tensor outputTensor = torch::zeros_like(inputTensor);
+torch::Tensor BilateralFilterCuda(torch::Tensor inputTensor, torch::Tensor outputTensor, float spatialSigma, float colorSigma) {
+  // torch::Tensor outputTensor = torch::zeros_like(inputTensor);
 
 #define CASE(c, d) BilateralFilterCuda<c, d>(inputTensor, outputTensor, spatialSigma, colorSigma);
   SWITCH_AB(CASE, 16, 3, inputTensor.size(1), inputTensor.dim() - 2);

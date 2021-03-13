@@ -137,6 +137,10 @@ __global__ void JointBilateralFilterCudaKernel2D(scalar_t* input, scalar_t* inpu
       for (int c = 0; c < C; c++) {
         scalar_t a = input[batchOffset + neighbourOffset + c * cColorStride];
         output[batchOffset + homeOffset + c * cColorStride] += a * totalWeight;
+
+        // if (homeY == 2 and homeX == 2) {
+        //   printf("x %d y %d channel %d value %f spatial_weight %f value_weight %f\n", kernelX, kernelY, c, a, spatialWeight, colorWeight);
+        // }
       }
 
       weightSum += totalWeight;
@@ -226,11 +230,11 @@ void JointBilateralFilterCuda(torch::Tensor inputTensor, torch::Tensor inputTens
 
   float* kernel = new float[kernelSize];
 
-  printf("spatial %f color %f \n", spatialSigma, colorSigma);
+  // printf("spatial %f color %f \n", spatialSigma, colorSigma);
   for (int i = 0; i < kernelSize; i++) {
     int distance = i - kernelHalfSize;
     kernel[i] = exp(distance * distance * spatialExponentFactor);
-    printf("%d %d %f \n", i, distance, kernel[i]);
+    // printf("%d %d %f \n", i, distance, kernel[i]);
 // 
   }
 
@@ -295,8 +299,8 @@ void JointBilateralFilterCuda(torch::Tensor inputTensor, torch::Tensor inputTens
 }
 
 // Function to choose template implementation based on dynamic, channels and dimensions
-torch::Tensor JointBilateralFilterCuda(torch::Tensor inputTensor, torch::Tensor inputTensor2, float spatialSigma, float colorSigma) {
-  torch::Tensor outputTensor = torch::zeros_like(inputTensor);
+torch::Tensor JointBilateralFilterCuda(torch::Tensor inputTensor, torch::Tensor inputTensor2, torch::Tensor outputTensor, float spatialSigma, float colorSigma) {
+  // torch::Tensor outputTensor = torch::zeros_like(inputTensor);
 
 #define CASE(c, d) JointBilateralFilterCuda<c, d>(inputTensor, inputTensor2, outputTensor, inputTensor2.size(1), spatialSigma, colorSigma);
   SWITCH_AB(CASE, 16, 3, inputTensor.size(1), inputTensor.dim() - 2);
