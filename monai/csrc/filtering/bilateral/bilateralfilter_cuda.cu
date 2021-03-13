@@ -28,6 +28,7 @@ __constant__ int cKernelSize;
 __constant__ float cKernel[256];
 
 __constant__ float cColorExponentFactor;
+__constant__ float cSpatialExponentFactor;
 
 template <typename scalar_t, int C>
 __global__ void BilateralFilterCudaKernel1D(scalar_t* input, scalar_t* output) {
@@ -55,7 +56,7 @@ __global__ void BilateralFilterCudaKernel1D(scalar_t* input, scalar_t* output) {
       distanceSquared += diff * diff;
     }
 
-    scalar_t spatialWeight = gaussian;
+    scalar_t spatialWeight = exp(gaussian * cSpatialExponentFactor);
     scalar_t colorWeight = exp(cColorExponentFactor * distanceSquared);
     scalar_t totalWeight = spatialWeight * colorWeight;
 
@@ -110,7 +111,7 @@ __global__ void BilateralFilterCudaKernel2D(scalar_t* input, scalar_t* output) {
         distanceSquared += diff * diff;
       }
 
-      scalar_t spatialWeight = gaussianX * gaussianY;
+      scalar_t spatialWeight = exp((gaussianX + gaussianY) * cSpatialExponentFactor);
       scalar_t colorWeight = exp(cColorExponentFactor * distanceSquared);
       scalar_t totalWeight = spatialWeight * colorWeight;
 
@@ -171,7 +172,7 @@ __global__ void BilateralFilterCudaKernel3D(scalar_t* input, scalar_t* output) {
           distanceSquared += diff * diff;
         }
 
-        scalar_t spatialWeight = gaussianX * gaussianY * gaussianZ;
+        scalar_t spatialWeight = exp((gaussianX + gaussianY + gaussianZ) * cSpatialExponentFactor);
         scalar_t colorWeight = exp(cColorExponentFactor * distanceSquared);
         scalar_t totalWeight = spatialWeight * colorWeight;
 
@@ -208,7 +209,7 @@ void BilateralFilterCuda(torch::Tensor inputTensor, torch::Tensor outputTensor, 
 
   for (int i = 0; i < kernelSize; i++) {
     int distance = i - kernelHalfSize;
-    kernel[i] = exp(distance * distance * spatialExponentFactor);
+    kernel[i] = distance * distance;
   }
 
   // Writing constant memory.
@@ -219,6 +220,7 @@ void BilateralFilterCuda(torch::Tensor inputTensor, torch::Tensor outputTensor, 
   cudaMemcpyToSymbol(cKernelSize, &kernelSize, sizeof(int));
   cudaMemcpyToSymbol(cKernel, kernel, sizeof(float) * kernelSize);
   cudaMemcpyToSymbol(cColorExponentFactor, &colorExponentFactor, sizeof(float));
+  cudaMemcpyToSymbol(cSpatialExponentFactor, &spatialExponentFactor, sizeof(float));
 
 #define BLOCK_SIZE 32
 

@@ -29,6 +29,7 @@ __constant__ int cKernelSize;
 __constant__ float cKernel[256];
 
 __constant__ float cColorExponentFactor;
+__constant__ float cSpatialExponentFactor;
 
 __constant__ int kBatchStride;
 __constant__ int kColorStride;
@@ -106,13 +107,13 @@ __global__ void JointBilateralFilterCudaKernel2D(scalar_t* input, scalar_t* inpu
   for (int kernelX = 0; kernelX < cKernelSize; kernelX++) {
     int neighbourX = max(0, min(homeX + (kernelX - kernelHalfSize), cSizes[0] - 1));
     int neighbourX2 = max(0, min(homeX2 + (kernelX - kernelHalfSize), kSizes[0] - 1));
-    scalar_t gaussianX = cKernel[kernelX];
+    scalar_t distX = cKernel[kernelX];
 
     for (int kernelY = 0; kernelY < cKernelSize; kernelY++) {
       int neighbourY = max(0, min(homeY + (kernelY - kernelHalfSize), cSizes[1] - 1));
       int neighbourY2 = max(0, min(homeY2 + (kernelY - kernelHalfSize), kSizes[1] - 1));
 
-      scalar_t gaussianY = cKernel[kernelY];
+      scalar_t distY = cKernel[kernelY];
 
       int neighbourOffset = neighbourX * cStrides[0] + neighbourY;
       int neighbourOffset2 = neighbourX2 * kStrides[0] + neighbourY2;
@@ -129,7 +130,7 @@ __global__ void JointBilateralFilterCudaKernel2D(scalar_t* input, scalar_t* inpu
         // printf("channel %d %f\n", c, diff);
       }
 
-      scalar_t spatialWeight = gaussianX * gaussianY;
+      scalar_t spatialWeight = exp(cSpatialExponentFactor * (distX + distY));
       scalar_t colorWeight = exp(cColorExponentFactor * distanceSquared);
       scalar_t totalWeight = spatialWeight * colorWeight;
 
@@ -233,7 +234,7 @@ void JointBilateralFilterCuda(torch::Tensor inputTensor, torch::Tensor inputTens
   // printf("spatial %f color %f \n", spatialSigma, colorSigma);
   for (int i = 0; i < kernelSize; i++) {
     int distance = i - kernelHalfSize;
-    kernel[i] = exp(distance * distance * spatialExponentFactor);
+    kernel[i] = distance * distance;
     // printf("%d %d %f \n", i, distance, kernel[i]);
 // 
   }
@@ -246,6 +247,7 @@ void JointBilateralFilterCuda(torch::Tensor inputTensor, torch::Tensor inputTens
   cudaMemcpyToSymbol(cKernelSize, &kernelSize, sizeof(int));
   cudaMemcpyToSymbol(cKernel, kernel, sizeof(float) * kernelSize);
   cudaMemcpyToSymbol(cColorExponentFactor, &colorExponentFactor, sizeof(float));
+  cudaMemcpyToSymbol(cSpatialExponentFactor, &spatialExponentFactor, sizeof(float));
 
   cudaMemcpyToSymbol(kBatchStride, &desc.batchStride, sizeof(int));
   cudaMemcpyToSymbol(kColorStride, &desc.channelStride, sizeof(int));
@@ -253,22 +255,6 @@ void JointBilateralFilterCuda(torch::Tensor inputTensor, torch::Tensor inputTens
   cudaMemcpyToSymbol(kStrides, desc.strides, sizeof(int) * D);
   cudaMemcpyToSymbol(cNfeat, &nfeat, sizeof(int));
 
-  // for (int i = 0; i < C; i++) {
-  //   printf("****\n");
-  //   printf("****\n");
-  //   printf("%d %d \n", i, desc.sizes[i]);
-  //   printf("%d %d \n", i, desc.strides[i]);
-  //   printf("%d %d \n", i, desc.batchStride);
-  //   printf("%d %d \n", i, desc.channelStride);
-  //   printf("****\n");
-  //   printf("%d %d \n", i, desc2.sizes[i]);
-  //   printf("%d %d \n", i, desc2.strides[i]);
-  //   printf("%d %d \n", i, desc2.batchStride);
-  //   printf("%d %d \n", i, desc2.channelStride);
-  //   printf("%d %d \n", i, nfeat);
-  //   // printf("%f \n", cColorStride[i]);
-  //   // printf("%f \n", cBatchStride[i]);
-  // }
 
 #define BLOCK_SIZE 32
 
@@ -300,7 +286,7 @@ void JointBilateralFilterCuda(torch::Tensor inputTensor, torch::Tensor inputTens
 
 // Function to choose template implementation based on dynamic, channels and dimensions
 torch::Tensor JointBilateralFilterCuda(torch::Tensor inputTensor, torch::Tensor inputTensor2, torch::Tensor outputTensor, float spatialSigma, float colorSigma) {
-  // torch::Tensor outputTensor = torch::zeros_like(inputTensor);
+  // outputTensor = torch::zeros_like(inputTensor);
 
 #define CASE(c, d) JointBilateralFilterCuda<c, d>(inputTensor, inputTensor2, outputTensor, inputTensor2.size(1), spatialSigma, colorSigma);
   SWITCH_AB(CASE, 16, 3, inputTensor.size(1), inputTensor.dim() - 2);
