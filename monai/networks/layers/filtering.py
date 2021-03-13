@@ -58,6 +58,48 @@ class BilateralFilter(torch.autograd.Function):
         return grad_input
 
 
+class JointBilateralFilter(torch.autograd.Function):
+    """
+    Blurs the input tensor spatially whilst preserving edges. Can run on 1D, 2D, or 3D,
+    tensors (on top of Batch and Channel dimensions). Two implementations are provided,
+    an exact solution and a much faster approximation which uses a permutohedral lattice.
+
+    See:
+        https://en.wikipedia.org/wiki/Bilateral_filter
+        https://graphics.stanford.edu/papers/permutohedral/
+
+    Args:
+        input: input tensor.
+
+        input2: input tensor specifying similarity features.
+
+        spatial sigma: the standard deviation of the spatial blur. Higher values can
+            hurt performace when not using the approximate method (see fast approx).
+
+        color sigma: the standard deviation of the color blur. Lower values preserve
+            edges better whilst higher values tend to a simple gaussian spatial blur.
+
+        fast approx: This flag chooses between two implementations. The approximate method may
+            produce artifacts in some scenarios whereas the exact solution may be intolerably
+            slow for high spatial standard deviations.
+
+    Returns:
+        output (torch.Tensor): output tensor.
+    """
+
+    @staticmethod
+    def forward(ctx, input, input2, spatial_sigma=5, color_sigma=0.5, fast_approx=True):
+        ctx.save_for_backward(input2, spatial_sigma, color_sigma, fast_approx,)
+        output_data = _C.joint_bilateral_filter(input, input2, spatial_sigma, color_sigma, fast_approx)
+        return output_data
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        input2, spatial_sigma, color_sigma, fast_approx = ctx.saved_variables
+        grad_input = _C.joint_bilateral_filter(grad_output, input2, spatial_sigma, color_sigma, fast_approx)
+        return grad_input
+
+
 class PHLFilter(torch.autograd.Function):
     """
     Filters input based on arbitrary feature vectors. Uses a permutohedral

@@ -40,3 +40,14 @@ torch::Tensor BilateralFilter(torch::Tensor input, float spatial_sigma, float co
 
   return filterFunction(input, spatial_sigma, color_sigma);
 }
+
+
+torch::Tensor JointBilateralFilterCuda(torch::Tensor input, torch::Tensor input2,float spatial_sigma, float color_sigma);
+
+torch::Tensor JointBilateralFilter(torch::Tensor input, torch::Tensor input2, float spatial_sigma, float color_sigma, bool usePHL) {
+  
+  // torch::Tensor (*filterFunction)(torch::Tensor, float, float);
+  // filterFunction = &JointBilateralFilterCuda;
+
+  return JointBilateralFilterCuda(input, input2, spatial_sigma, color_sigma);
+}
