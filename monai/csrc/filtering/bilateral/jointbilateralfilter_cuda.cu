@@ -32,7 +32,7 @@ __constant__ float cColorExponentFactor;
 
 __constant__ int kBatchStride;
 __constant__ int kColorStride;
-__constant__ int nfeat;
+__constant__ int cNfeat;
 
 __constant__ int kSizes[3];
 __constant__ int kStrides[3];
@@ -118,13 +118,15 @@ __global__ void JointBilateralFilterCudaKernel2D(scalar_t* input, scalar_t* inpu
       int neighbourOffset2 = neighbourX2 * kStrides[0] + neighbourY2;
 
       scalar_t distanceSquared = 0;
+      // printf("nfeat %d\n", cNfeat);
 
 #pragma unroll
-      for (int c = 0; c < nfeat; c++) {
+      for (int c = 0; c < cNfeat; c++) {
         scalar_t a = input2[batchOffset2 + homeOffset + c * kColorStride];
         scalar_t b = input2[batchOffset2 + neighbourOffset2 + c * kColorStride];
         scalar_t diff = a - b;
         distanceSquared += diff * diff;
+        // printf("channel %d %f\n", c, diff);
       }
 
       scalar_t spatialWeight = gaussianX * gaussianY;
@@ -221,6 +223,7 @@ void JointBilateralFilterCuda(torch::Tensor inputTensor, torch::Tensor inputTens
   // Pre-calculating gaussian kernel.
   int kernelSize = (int)ceil(5.0f * spatialSigma) | 1; // ORing last bit to ensure odd window size
   int kernelHalfSize = floor(0.5f * kernelSize);
+
   float* kernel = new float[kernelSize];
 
   printf("spatial %f color %f \n", spatialSigma, colorSigma);
@@ -244,7 +247,7 @@ void JointBilateralFilterCuda(torch::Tensor inputTensor, torch::Tensor inputTens
   cudaMemcpyToSymbol(kColorStride, &desc.channelStride, sizeof(int));
   cudaMemcpyToSymbol(kSizes, desc.sizes, sizeof(int) * D);
   cudaMemcpyToSymbol(kStrides, desc.strides, sizeof(int) * D);
-  cudaMemcpyToSymbol(nfeat, &nfeat, sizeof(int));
+  cudaMemcpyToSymbol(cNfeat, &nfeat, sizeof(int));
 
   // for (int i = 0; i < C; i++) {
   //   printf("****\n");
